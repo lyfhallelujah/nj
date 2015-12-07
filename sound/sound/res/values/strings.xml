@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="subscription_key">570911efce4846fd8a923f0dfac1e5e6</string>
+    <string name="add_subscription_key_tip_title">Subscription Key is Needed</string>
+    <string name="add_subscription_key_tip">Please put your subscription key to source file \"app/res/values/strings.xml\" to enable Face API calls.</string>
+    <string name="luisAppID">yourLuisAppID</string>
+    <string name="luisSubscriptionID">yourLuisSubscriptionID</string>
+    
+    
+    <string name="app_name">sound</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Settings</string>
+	
+    <string name="add_music">add</string>
+    <string name="delete_music">delete</string>
+    <string name="begin_micro">begin</string>
+    <string name="clear_micro">clear</string>
+    <string name="submit">submit</string>
+    <string name="back_to_main">Back</string>
+    
+</resources>

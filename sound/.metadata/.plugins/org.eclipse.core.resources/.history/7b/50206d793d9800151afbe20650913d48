@@ -1,0 +1,589 @@
+package com.example.sound;
+
+import android.support.v7.app.ActionBarActivity;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.StrictMode;
+import android.view.Menu;
+import android.view.MenuItem;
+
+
+import android.app.AlertDialog;
+
+import android.content.Intent;
+
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.AdapterView;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ListView;
+import android.widget.TextView;
+
+import android.widget.AdapterView.OnItemClickListener;
+
+
+
+import com.microsoft.projectoxford.speechrecognition.Confidence;
+import com.microsoft.projectoxford.speechrecognition.ISpeechRecognitionServerEvents;
+import com.microsoft.projectoxford.speechrecognition.MicrophoneRecognitionClient;
+import com.microsoft.projectoxford.speechrecognition.MicrophoneRecognitionClientWithIntent;
+import com.microsoft.projectoxford.speechrecognition.RecognitionResult;
+import com.microsoft.projectoxford.speechrecognition.RecognitionStatus;
+import com.microsoft.projectoxford.speechrecognition.SpeechRecognitionMode;
+import com.microsoft.projectoxford.speechrecognition.SpeechRecognitionServiceFactory;
+
+
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EncodingUtils;
+
+
+public class MainActivity extends ActionBarActivity implements OnClickListener,ISpeechRecognitionServerEvents{
+	
+	
+	String my_url_path;
+	
+	
+	public class MyTask extends AsyncTask<String, String ,StringBuffer> {
+
+		private EditText edtHTTP;
+		private StringBuffer sbHTML;
+
+		public MyTask(EditText edtHTTP) {
+
+			this.edtHTTP = edtHTTP;
+			sbHTML = new StringBuffer();
+		}
+
+		@Override
+		protected StringBuffer doInBackground(String... params) {
+			HttpClient hc = new DefaultHttpClient();
+			HttpGet hg = new HttpGet(params[0]);
+
+			try {
+				HttpResponse hr = hc.execute(hg);
+				BufferedReader br = new BufferedReader(new InputStreamReader(hr
+						.getEntity().getContent()));
+
+				String line = "";
+				sbHTML = new StringBuffer();
+				while ((line = br.readLine()) != null) {
+					sbHTML.append(line);
+				}
+
+				return sbHTML;
+			} catch (IOException e) {
+
+				edtHTTP.append("wrong to get html\n");
+			}
+			return null;
+		}
+
+		@Override
+		protected void onPostExecute(StringBuffer result) {
+			// 判断是否为null，若不为null，则在页面显示HTML代码
+			if (result != null) {
+				//edtHTTP.setText(result);
+				//String p_s = "<a href=\"/song/[^>]+>";
+				String p_s = "<p[^>]*>[^<]*<a[^>]*>[^<]*(<em>[^<]*</em>)*[^<]*</a[^>]*>[^<]*</p[^>]*>";
+
+				Pattern pattern = Pattern.compile(p_s);
+				//Pattern pattern = Pattern.compile("<a");
+				String my_html = result.toString();
+
+				Matcher matcher = pattern.matcher(my_html);
+				String[] names = new String[20];
+				String[] urls = new String[20];
+				int find_num = 0;
+				while(matcher.find())
+				{
+					//edtHTTP.append(matcher.group(0)+"\n");
+					String temp = matcher.group(0);
+					temp = temp.replaceAll("<em>","");
+					temp = temp.replaceAll("</em>","");
+					Pattern pattern_name = Pattern.compile("<a[^>]*>([^<]*)</a[^>]*>");
+					Pattern pattern_url = Pattern.compile("<a[^/]*([^\"]*)\"");
+					Matcher matcher_name = pattern_name.matcher(temp);
+					Matcher matcher_url = pattern_url.matcher(temp);
+					String name = "";
+					String url = "";
+					boolean ok = true;
+					if(matcher_name.find()){
+						name = matcher_name.group(1);
+					}
+					else{
+						ok = false;
+					}
+					if(matcher_url.find()){
+						url = "http://music.baidu.com" + matcher_url.group(1);
+					}
+					else{
+						ok = false;
+					}
+					if(ok)
+					{
+						find_num = find_num + 1;
+						names[find_num-1] = new String(name);
+						urls[find_num-1] = new String(url);
+						//edtHTTP.append(name + "  " + url + "\n");
+						
+					}
+				}
+				if(find_num <= 1)
+				{
+					edtHTTP.setText("can not find, try again!");
+				}
+				else if(find_num >=2 && find_num <8){
+					for(int i = 0;i<find_num-1;i++){
+						musicList.add(new music(names[i],urls[i]));
+					}
+				}
+				else if(find_num >= 8)
+				{
+					for(int i = 0;i<find_num-2;i++){
+						musicList.add(new music(names[i],urls[i]));
+					}
+				}
+				adapter.notifyDataSetChanged();
+			}
+			
+			Button startButton = (Button) findViewById(R.id.begin_micro);
+	        startButton.setEnabled(true);
+			
+			super.onPostExecute(result);
+		}
+	}
+
+	
+	
+	/*
+	private String getHtml(String urlString) {
+		try {
+		URLEncoder.encode(urlString, "UTF-8");
+		StringBuffer html = new StringBuffer();
+		java.net.URL url = new java.net.URL(urlString);
+		java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+		conn.setRequestMethod("GET");
+		conn.setConnectTimeout(6*1000); 
+		conn.setDoOutput(true);
+		conn.connect();
+		java.io.InputStreamReader isr = new java.io.InputStreamReader(conn.getInputStream());
+		java.io.BufferedReader br = new java.io.BufferedReader(isr);
+
+		String temp;
+		while ((temp = br.readLine()) != null) {
+			URLEncoder.encode(temp, "UTF-8");
+			if(!temp.trim().equals("")){
+				html.append(temp).append("\n");
+			}
+		}
+		br.close();
+		isr.close();
+		return html.toString();
+		} catch (Exception e) {
+			TextView myEditText = (TextView) findViewById(R.id.ceshi);
+            myEditText.append(e.toString() + "\n");
+			e.printStackTrace();
+			return null;
+		}
+	} 
+	*/
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	int m_waitSeconds = 0;
+    MicrophoneRecognitionClient m_micClient = null;
+    boolean m_isMicrophoneReco;
+    SpeechRecognitionMode m_recoMode;
+    boolean m_isIntent;
+    FinalResponseStatus isReceivedResponse = FinalResponseStatus.NotReceived;
+    
+    public enum FinalResponseStatus { NotReceived, OK, Timeout }
+            
+    public void onPartialResponseReceived(final String response)
+    {
+    	//TextView myEditText = (TextView) findViewById(R.id.ceshi);
+        //myEditText.append("********* Partial Result *********\n");
+        //myEditText.append(response + "\n"); 
+    }
+
+    public void onFinalResponseReceived(final RecognitionResult response)
+    {
+        
+        boolean isFinalDicationMessage = m_recoMode == SpeechRecognitionMode.LongDictation && 
+                                                       (response.RecognitionStatus == RecognitionStatus.EndOfDictation ||
+                                                        response.RecognitionStatus == RecognitionStatus.DictationEndSilenceTimeout);
+        if (m_isMicrophoneReco && ((m_recoMode == SpeechRecognitionMode.ShortPhrase) || isFinalDicationMessage)) {
+            m_micClient.endMicAndRecognition();
+        }
+
+        if ((m_recoMode == SpeechRecognitionMode.ShortPhrase) || isFinalDicationMessage) {
+            //Button startButton = (Button) findViewById(R.id.begin_micro);
+            //startButton.setEnabled(true);
+            this.isReceivedResponse = FinalResponseStatus.OK;
+        }
+
+        if (!isFinalDicationMessage) {
+        	EditText myEditText = (EditText) findViewById(R.id.ceshi);
+            /*
+        	myEditText.append("***** Final NBEST Results *****\n");
+            for (int i = 0; i < response.Results.length; i++) {
+                myEditText.append(i + " Confidence=" + response.Results[i].Confidence + 
+                                  " Text=\"" + response.Results[i].DisplayText + "\"\n");
+            }
+            */
+            myEditText.append("***** searching the Internet *****\n");
+            myEditText.append("***** waiting *****\n");
+            my_url_path = "";
+            for (int i = 0; i < response.Results.length; i++) {
+            	if(response.Results[i].Confidence == Confidence.High){
+            		my_url_path = "http://music.baidu.com/search/lrc?key=" + response.Results[i].DisplayText;
+            		break;
+            	}
+            }
+            if(my_url_path.equals("")){
+            	for (int i = 0; i < response.Results.length; i++) {
+                	if(response.Results[i].Confidence == Confidence.Normal){
+                		my_url_path = "http://music.baidu.com/search/lrc?key=" + response.Results[i].DisplayText;
+                		break;
+                	}
+                }
+            }
+            if(my_url_path.equals("")){
+            	my_url_path = "http://music.baidu.com/search/lrc?key=" + response.Results[0].DisplayText;
+            }
+            //myEditText.setText(my_url_path + "\n");
+            
+            	//String my_url_path = "http://music.baidu.com/search/lrc?key=";
+	            	try {
+						/*byte[] temp = GetHtml();
+						String my_html = new String(temp,"GB2312");*/
+	            		String my_html = "";
+	            		MyTask myTask = new MyTask(myEditText);
+						myTask.execute(my_url_path);
+	            		
+	            	} catch (Exception e) {
+	            		myEditText.append("error!!!!");
+						e.printStackTrace();
+					}
+			
+        }
+    
+    } 
+
+    /**
+    * Called when a final response is received and its intent is parsed 
+    */
+    public void onIntentReceived(final String payload)
+    {
+    	/*
+    	EditText myEditText = (EditText) findViewById(R.id.ceshi);
+        myEditText.append("********* Final Intent *********\n");
+        myEditText.append(payload + "\n");
+        */
+    }
+    
+    public void onError(final int errorCode, final String response) 
+    {
+        Button startButton = (Button) findViewById(R.id.begin_micro);
+        startButton.setEnabled(true);
+        
+        EditText myEditText = (EditText) findViewById(R.id.ceshi);
+        myEditText.append("********* Error Detected *********\n");
+        myEditText.append(errorCode + " " + response + "\n");
+    }
+
+
+    public void onAudioEvent(boolean recording)
+    {
+        if (!recording) {
+            m_micClient.endMicAndRecognition();
+            Button startButton = (Button) findViewById(R.id.begin_micro);
+            startButton.setEnabled(true);
+        }
+        
+        //TextView myEditText = (TextView) findViewById(R.id.ceshi);
+        //myEditText.append("********* Microphone status: " + recording + " *********\n");
+    }
+
+
+    
+    void initializeRecoClient()
+    {
+    	EditText myEditText = (EditText) findViewById(R.id.ceshi);
+        myEditText.setText("click the button to start!");
+        
+        String language = "en-us";
+        
+        String subscriptionKey = this.getString(R.string.subscription_key);
+        String luisAppID = this.getString(R.string.luisAppID);
+        String luisSubscriptionID = this.getString(R.string.luisSubscriptionID);
+     
+        if (m_isMicrophoneReco && null == m_micClient) {
+            if (!m_isIntent) {
+                m_micClient = SpeechRecognitionServiceFactory.createMicrophoneClient(this,
+                                                                                     m_recoMode, 
+                                                                                     language,
+                                                                                     this,
+                                                                                     subscriptionKey);
+            }
+            else {
+                MicrophoneRecognitionClientWithIntent intentMicClient;
+                intentMicClient = SpeechRecognitionServiceFactory.createMicrophoneClientWithIntent(this,
+                                                                                                   language,
+                                                                                                   this,
+                                                                                                   subscriptionKey,
+                                                                                                   luisAppID,
+                                                                                                   luisSubscriptionID);
+                m_micClient = intentMicClient;
+
+            }
+        }
+    }
+
+   /* void addListenerOnButton() 
+    {
+        final Button startButton = (Button) findViewById(R.id.begin_micro); 
+        startButton.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View arg0)
+            {             
+                TextView myEditText = (TextView) findViewById(R.id.ceshi);
+                myEditText.setText("");
+                startButton.setEnabled(false);
+
+                if (m_isMicrophoneReco) {
+                    // Speech recognition from the microphone.  The microphone is turned on and data from the microphone
+                    // is sent to the Speech Recognition Service.  A built in Silence Detector
+                    // is applied to the microphone data before it is sent to the recognition service.
+                    m_micClient.startMicAndRecognition();   
+                }
+            }
+        });
+    }*/
+	
+	
+    public String readFileData(String fileName){ 
+        String res=""; 
+        try{ 
+         FileInputStream fin = openFileInput(fileName); 
+         int length = fin.available(); 
+         byte [] buffer = new byte[length]; 
+         fin.read(buffer);     
+         res = EncodingUtils.getString(buffer, "UTF-8"); 
+         fin.close();     
+        } 
+        catch(Exception e){ 
+         e.printStackTrace(); 
+        } 
+        return res; 
+    }   
+	
+
+	
+	private List<music> musicList = new ArrayList<music>();
+	private void initmusic(){
+		String music_data = readFileData("music_data");
+		String[] fenci = music_data.split("\\|");
+		for(int i=0;i<fenci.length;i++)
+		{
+			musicList.add(new music(fenci[i],fenci[i+1]));
+			i++;
+		}
+		adapter.notifyDataSetChanged();
+		
+	}
+	TextView biaoti;
+    Button add_music,delete_music,begin_micro,clear_micro,submit;
+    ListView musics;
+    private int delete_or_not;
+    musicAdapter adapter;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+    	 StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().detectDiskReads().detectDiskWrites().detectNetwork().penaltyLog().build());
+         StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().detectLeakedSqlLiteObjects().detectLeakedClosableObjects().penaltyLog().penaltyDeath().build());
+    	
+    	
+    	super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+      
+    	
+        if (getString(R.string.subscription_key).startsWith("Please")) {
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.add_subscription_key_tip_title))
+                    .setMessage(getString(R.string.add_subscription_key_tip))
+                    .setCancelable(false)
+                    .show();
+        }
+        
+ 
+        m_recoMode = SpeechRecognitionMode.ShortPhrase;
+        m_isMicrophoneReco = true;
+        m_isIntent = false;
+        
+        
+        m_waitSeconds = m_recoMode == SpeechRecognitionMode.ShortPhrase ? 20 : 200;
+        
+        initializeRecoClient();
+        
+        // setup the buttons
+        //addListenerOnButton();
+        
+    	
+        
+        musics = (ListView)findViewById(R.id.music_list);
+        biaoti = (TextView) findViewById(R.id.title);
+        
+        begin_micro = (Button) findViewById(R.id.begin_micro);
+        /*
+        add_music = (Button) findViewById(R.id.add_music);
+        delete_music = (Button) findViewById(R.id.delete_music);
+        begin_micro = (Button) findViewById(R.id.begin_micro);
+        clear_micro = (Button) findViewById(R.id.clear_micro);
+        submit = (Button) findViewById(R.id.submit);
+        */
+        delete_or_not = 0;
+        
+        initmusic();
+        
+        adapter = new musicAdapter(MainActivity.this,
+        											R.layout.music_item,
+        											musicList);
+        musics.setAdapter(adapter);
+        
+        musics.setOnItemClickListener(new OnItemClickListener() {
+        	@Override
+        	public void onItemClick(AdapterView<?> parent, View view, 
+        			int position, long id) {
+        		if(delete_or_not == 0)
+        		{
+	        	    music m = musicList.get(position);
+	        	    Bundle bundle = new Bundle();
+	        	    bundle.putString("music_name", m.getName());
+	        	    bundle.putString("music_url",m.getUrl());
+	        	   
+	        	    String total_data = "";
+	        	    for(music tmp:musicList){
+	        	    	total_data = total_data + tmp.getName() + "|" + tmp.getUrl() + "|";
+	        	    }
+	        	    writeFileData("music_data",total_data);
+	        	    //Intent intent = new Intent(MainActivity.this, DetailActivity.class);
+	        	    Intent intent = new Intent(MainActivity.this, BaiduActivity.class);
+	        	    intent.putExtras(bundle);
+	        	    startActivity(intent);  
+	        	}
+        		else
+        		{
+        			musicList.remove(position);
+        			adapter.notifyDataSetChanged();
+        			delete_or_not = 0;
+        		}
+        	}			
+        });
+        
+        begin_micro.setOnClickListener(this);
+        /*
+        add_music.setOnClickListener(this);
+        delete_music.setOnClickListener(this);
+        begin_micro.setOnClickListener(this);
+        clear_micro.setOnClickListener(this);
+        submit.setOnClickListener(this);
+        */
+    }
+    
+    @Override
+    public void onClick(View v){
+    	CharSequence text = "";
+    	switch (v.getId()) {
+    	/*
+        case R.id.add_music:
+        	text = "add music";
+        	biaoti.setText(text);
+          break;
+        case R.id.delete_music:
+        	if(delete_or_not == 0){
+        		text = "now to delete music";
+        		biaoti.setText(text);
+        		delete_or_not = 1;
+        	}
+        	else
+        	{
+        		text = "hello world";
+        		biaoti.setText(text);
+        		delete_or_not = 0;
+        	}
+          break;
+          */
+        case R.id.begin_micro:
+        	EditText myEditText = (EditText) findViewById(R.id.ceshi);
+            myEditText.setText("");
+            begin_micro.setEnabled(false);
+            musicList.clear();
+            adapter.notifyDataSetChanged();
+            if (m_isMicrophoneReco) {
+                // Speech recognition from the microphone.  The microphone is turned on and data from the microphone
+                // is sent to the Speech Recognition Service.  A built in Silence Detector
+                // is applied to the microphone data before it is sent to the recognition service.
+                m_micClient.startMicAndRecognition();   
+            }
+          break;
+        default:
+          break;
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+    	
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+    	
+        int id = item.getItemId();
+        if (id == R.id.action_settings) {
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+    
+}
